@@ -31,4 +31,27 @@ I am building this module so I can write the same 3d programs from my phone and 
 ## How to Run
 
 This project is intended for iPhone, but it can also be run on PC using a port I am also developing:
-    [Pythonista OpenGL Binding](https://github.com/SamyBencherif/pythonista-OpenGL-binding)
+    [Pythonista OpenGL Binding](https://github.com/SamyBencherif/Pythonista-OpenGL-binding)
+
+### Run on iPhone
+
+1. open this folder in Pythonista
+1. tap on worldBuilder.py and click run
+1. You can build, delete, and save/load
+1. You can also run game.py, which allows traversal of the world you previously made
+
+### Run on pc
+
+First clone the Pythonista binding
+```
+git clone https://github.com/SamyBencherif/Pythonista-OpenGL-binding.git
+cd Pythonista-OpenGL-binding
+git clone https://github.com/SamyBencherif/LIB3D.git
+cp LIB3D/*.py .
+cp LIB3D/*.dat .
+```
+
+Finally run it by issuing the command
+```
+python worldBuilder.py
+```
