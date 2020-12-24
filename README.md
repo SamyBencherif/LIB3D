@@ -31,4 +31,4 @@ I am building this module so I can write the same 3d programs from my phone and 
 ## How to Run
 
 This project is intended for iPhone, but it can also be run on PC using a port I am also developing:
-    [Compista](about:blank)
+    [Pythonista OpenGL Binding](https://github.com/SamyBencherif/pythonista-OpenGL-binding)
