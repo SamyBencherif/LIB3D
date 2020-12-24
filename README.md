@@ -1,5 +1,8 @@
 # **LIB3D** is a 3d graphics library intended to work in [Pythonista](http://omz-software.com/pythonista/) on iOS
 
+<img src="https://i.imgur.com/8lZf09o.png" width=400px><img src="https://i.imgur.com/EkMnr1L.png" width=400px>
+
+
 Supports
 
 * isometric quad rendering
