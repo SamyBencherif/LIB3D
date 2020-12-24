@@ -40,9 +40,9 @@ This project is intended for iPhone, but it can also be run on PC using a port I
 1. You can build, delete, and save/load
 1. You can also run game.py, which allows traversal of the world you previously made
 
-### Run on pc
+### Run on PC
 
-First clone the Pythonista binding
+Clone the Pythonista binding and LIB3D, then move the files so everything executes correctly using these shell commands:
 ```
 git clone https://github.com/SamyBencherif/Pythonista-OpenGL-binding.git
 cd Pythonista-OpenGL-binding
