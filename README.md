@@ -5,9 +5,13 @@
 
 Supports
 
-* isometric quad rendering
+* isometric quad rendering*
     * textures are selected from Pythonista's builtins
     * coordinates are specified in 3d using (3,4) matrices
+    * *this feature is not currently accessible because of:
+* experimental perspective rendering
+    * uses existing isometric renderer
+    * when it's done, there will be an option for which projection to use
 * directional shading
     * a single directional light source is currently applied to all scenes
 * user-interface controls
@@ -29,7 +33,7 @@ I am building this module so I can write the same 3d programs from my phone and 
 
 * The other constraint, voxels, has nothing to do with the renderer. This is a result of the existing scene management functions. It would be possible to incorporate non-voxel based geometry by adding supporting functions.
 
-* Finally, we have another rendering constaint. Currently we only draw quads because LIB3D uses image_quad from Pythonista's scene module. Incidentally there is also a triangle_strip function.
+* Finally, we have another rendering constraint. Currently we only draw quads because LIB3D uses image_quad from Pythonista's scene module. Incidentally there is also a triangle_strip function.
 
 ## How to Run
 
@@ -48,13 +52,16 @@ This project is intended for iPhone, but it can also be run on PC using a port I
 Clone the Pythonista binding and LIB3D, then move the files so everything executes correctly using these shell commands:
 ```
 git clone https://github.com/SamyBencherif/Pythonista-OpenGL-binding.git
-cd Pythonista-OpenGL-binding
+```
+
+Follow instructions to create and start the virtual environment
+
+```
 git clone https://github.com/SamyBencherif/LIB3D.git
-cp LIB3D/*.py .
-cp LIB3D/*.dat .
 ```
 
 Finally run it by issuing the command
+
 ```
 python worldBuilder.py
 ```
