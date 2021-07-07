@@ -26,6 +26,11 @@ from numpy import matrix, array
 import numpy as np
 from math import cos, sin, pi, asin, tan, sqrt
 
+try:
+	matmul = np.matmul
+except:
+	matmul = lambda a,b: a*b
+
 x_norm = [
     [0,0,0],
     [0,0,1],
@@ -75,7 +80,7 @@ view_matrix = matrix([
 ])
 
 # Model-View-Projection Matrix
-MVP = np.matmul(proj_matrix, view_matrix)
+MVP = matmul(proj_matrix, view_matrix)
 
 inv_view_matrix = np.linalg.pinv(view_matrix)
 
@@ -151,7 +156,7 @@ New elements are initialized to 1.'''
 
 def zdepth(quadP):
   quadP = extendRow(quadP)
-  proj = np.matmul(MVP, quadP)
+  proj = matmul(MVP, quadP)
   return sum([proj[2,i] for i in range(4)])
   
 def pointTest(point, callback):
@@ -221,7 +226,7 @@ def render():
     pointMatrix = extendRow(pointMatrix)
     
     assert pointMatrix.shape == (4,4)
-    pointMatrix = np.matmul(MVP, pointMatrix)
+    pointMatrix = matmul(MVP, pointMatrix)
     assert pointMatrix.shape == (4,4)
 
     fcull = False
@@ -366,7 +371,7 @@ def setViewMatrix():
   inv_view_matrix = np.linalg.pinv(view_matrix)
 
   global MVP
-  MVP = np.matmul(proj_matrix, view_matrix)
+  MVP = matmul(proj_matrix, view_matrix)
 
 def orbitalCam(touch):
 
