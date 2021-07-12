@@ -11,6 +11,7 @@ class MyScene(Scene):
     lib3d.uiElements.append(lib3d.Joystick(-65, 220))
 
   def update(self):
+    background(0,0,0)
     lib3d.render()
     lib3d.renderUI()
 
