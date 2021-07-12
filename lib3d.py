@@ -188,6 +188,7 @@ void main(void) {
     vec4 col = texture2D(u_texture,uv);
 
     float b = dot(norm, vec3(.7,.8,.9));
+    col.rg = uv; col.b = 1.;
     gl_FragColor = vec4(col.rgb*b, col.a);
 }
 ''')
