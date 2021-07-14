@@ -687,8 +687,8 @@ def renderUI():
     e.render()
     
   if rotJoy:
-    rotation[1] += rotJoy.getValue()[0] / 30
-    rotation[0] -= rotJoy.getValue()[1] / 30
+    rotation[1] += rotJoy.getValue()[0] / 120
+    rotation[0] -= rotJoy.getValue()[1] / 120
     setViewMatrix()
     
   if zoomSlider:
@@ -697,8 +697,8 @@ def renderUI():
     scale = min(max(10, scale), 500)
     
   if panJoy:
-    HAxis = panJoy.getValue()[0] / 10
-    VAxis = panJoy.getValue()[1] / 10
+    HAxis = panJoy.getValue()[0] / 40
+    VAxis = panJoy.getValue()[1] / 40
     position[0] += HAxis*cos(rotation[1]) + VAxis*sin(rotation[1])
     position[2] += -HAxis*sin(rotation[1]) + VAxis*cos(rotation[1])
     
