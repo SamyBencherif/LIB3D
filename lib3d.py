@@ -182,13 +182,40 @@ uniform vec2 u_sprite_size;
 // these are set by lib3d
 uniform vec3 norm;
 uniform vec3 pos;
+uniform vec3 dps;
+uniform float amnt;
+
+float ef(vec2 a, vec2 b, vec2 c)
+{
+  return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]);
+}
 
 void main(void) {
     vec2 uv = v_tex_coord;
+
+    vec3 idps = 1./dps;
+    float w0 = ef(vec2(1,0), vec2(0,1), uv);
+    float w1 = ef(vec2(0,0), vec2(0,1), uv);
+    float w2 = ef(vec2(0,0), vec2(1,0), uv);
+    uv /= w0*dps.x + w1*dps.y + w2*dps.z;
+    float z = 1./(w0*idps.x + w1*idps.y + w2*idps.z);
+    uv *= z;
+
+    uv = uv * amnt + v_tex_coord * (1.-amnt);
+
+    // sample texture
     vec4 col = texture2D(u_texture,uv);
 
+    // flat shading
     float b = dot(norm, vec3(.7,.8,.9));
-    col.rg = uv; col.b = 1.;
+
+    // colorful overlay
+    vec3 ovr = vec3(uv,1.);
+
+    // blending
+    col.rgb = ovr*.8 + col.rgb*.2;
+
+    // output color
     gl_FragColor = vec4(col.rgb*b, col.a);
 }
 ''')
@@ -207,7 +234,6 @@ def render():
   pmat = matrix([position,]*4).T
   testHit = None
   i = 0
-  use_shader(test_shader)
   while i < len(quads):
     if i >= len(quads):
       # caused by delete
@@ -228,6 +254,7 @@ def render():
     pointMatrix = extendRow(pointMatrix)
     
     assert pointMatrix.shape == (4,4)
+    camSpace = matmul(view_matrix, pointMatrix)
     pointMatrix = matmul(MVP, pointMatrix)
     assert pointMatrix.shape == (4,4)
 
@@ -271,8 +298,15 @@ def render():
         if not failed:
           testHit = (q, points2d, callback)
           
+      use_shader(test_shader)
       test_shader.set_uniform('norm', getNorm(q))
       test_shader.set_uniform('pos', getCenter(q[1]))
+      test_shader.set_uniform('dps', [
+        camSpace[2,0],
+        camSpace[2,1],
+        camSpace[2,2]
+      ])
+      test_shader.set_uniform('amnt', (uiElements[-1].getValue()+1)/2);
       image_quad(texture,*points2d)
       
       if outlines:
@@ -359,7 +393,7 @@ def setViewMatrix():
   alpha = (rotation[0])
   beta = (rotation[1])
   
-  # isometric projection
+  # isometric projection/
   view_matrix[0,0] = cos(beta)
   view_matrix[0,1] = 0
   view_matrix[0,2] = -sin(beta)
@@ -663,8 +697,10 @@ def renderUI():
     scale = min(max(10, scale), 500)
     
   if panJoy:
-    offset[0] -= panJoy.getValue()[0] * 3
-    offset[1] -= panJoy.getValue()[1] * 3
+    HAxis = panJoy.getValue()[0] / 10
+    VAxis = panJoy.getValue()[1] / 10
+    position[0] += HAxis*cos(rotation[1]) + VAxis*sin(rotation[1])
+    position[2] += -HAxis*sin(rotation[1]) + VAxis*cos(rotation[1])
     
 panJoy = None
 zoomSlider = None
