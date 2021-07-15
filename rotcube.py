@@ -6,7 +6,7 @@ class MyScene(Scene):
 
   def setup(self):
     lib3d.setSize(self.size)
-    lib3d.toggleCube('test:Ruler', [0,0,3])
+    lib3d.toggleCube('test:Ruler', [0,0,1])
     lib3d.addTouchControls()
     #lib3d.rotation[0] = .4;
     #lib3d.rotation[1] = .4;

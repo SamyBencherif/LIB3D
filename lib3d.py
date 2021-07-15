@@ -185,35 +185,50 @@ uniform vec3 pos;
 uniform vec3 dps;
 uniform float amnt;
 
-float ef(vec2 a, vec2 b, vec2 c)
-{
-  return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]);
-}
-
 void main(void) {
     vec2 uv = v_tex_coord;
 
     vec3 idps = 1./dps;
-    float w0 = ef(vec2(1,0), vec2(0,1), uv);
-    float w1 = ef(vec2(0,0), vec2(0,1), uv);
-    float w2 = ef(vec2(0,0), vec2(1,0), uv);
-    uv /= w0*dps.x + w1*dps.y + w2*dps.z;
+
+    vec2 A = vec2(0,0);
+    vec2 B = vec2(1,0);
+    vec2 C = vec2(0,1);
+
+    float w0 = (1.-uv.x)*(1.-uv.y);
+    float w1 = uv.x;
+    float w2 = uv.y;
+
     float z = 1./(w0*idps.x + w1*idps.y + w2*idps.z);
-    uv *= z;
+    float depth = (w0+w1+w2)*z;
+
+    // reconstruct uv with depth correction
+    uv  = A/dps.x*w0 + B/dps.y*w1 + C/dps.z*w2;
+
+    // multiply back inverse interpolated depth    
+    uv *= depth;
 
     uv = uv * amnt + v_tex_coord * (1.-amnt);
 
     // sample texture
     vec4 col = texture2D(u_texture,uv);
 
+    // test: display depth
+    col *= vec4(vec3(depth/10.), 1.);
+
     // flat shading
     float b = dot(norm, vec3(.7,.8,.9));
 
     // colorful overlay
-    vec3 ovr = vec3(uv,1.);
+    vec3 ovr = w0*vec3(0,0,1)+ 
+               w1*vec3(1,0,0)+ 
+               w2*vec3(1,1,0);
 
     // blending
-    col.rgb = ovr*.8 + col.rgb*.2;
+    col.rgb = ovr*.6 + col.rgb*.4;
+
+    // black out the other triangle
+    if (uv.x > 1.-uv.y)
+      col = vec4(0.,0.,0.,1.);
 
     // output color
     gl_FragColor = vec4(col.rgb*b, col.a);
@@ -693,8 +708,10 @@ def renderUI():
     
   if zoomSlider:
     global scale
-    scale += zoomSlider.getValue() * 5
-    scale = min(max(10, scale), 500)
+    #scale += zoomSlider.getValue() * 5
+    #scale = min(max(10, scale), 500)
+    # temporary: repurpose slider as elevation control
+    position[1] += zoomSlider.getValue()/50
     
   if panJoy:
     HAxis = panJoy.getValue()[0] / 40
