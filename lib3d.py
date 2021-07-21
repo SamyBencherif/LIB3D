@@ -22,6 +22,13 @@ from scene_drawing import *
 from scene import *
 Button = None # not interested in scene.Button
 
+# This module may be used without access to pyglet, without joystick support
+try:
+  from pyglet import input
+except:
+  input = None
+
+
 from numpy import matrix, array
 import numpy as np
 from math import cos, sin, pi, asin, tan, sqrt
@@ -183,26 +190,37 @@ uniform vec2 u_sprite_size;
 uniform vec3 norm;
 uniform vec3 pos;
 uniform vec3 dps;
-uniform float amnt;
+uniform float amnt; // for debug slider
+
+uniform vec2 uv0;
+uniform vec2 uv1;
+uniform vec2 uv2;
+
+// grace a scratchapixel.com
+float eF(vec2 a, vec2 b, vec2 c)
+{ return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]); }
 
 void main(void) {
     vec2 uv = v_tex_coord;
 
     vec3 idps = 1./dps;
 
-    vec2 A = vec2(0,0);
-    vec2 B = vec2(1,0);
-    vec2 C = vec2(0,1);
+    // shortcut for vertex uvs
+    vec2 A = uv0;
+    vec2 B = uv1;
+    vec2 C = uv2;
 
-    float w0 = (1.-uv.x)*(1.-uv.y);
-    float w1 = uv.x;
-    float w2 = uv.y;
+    // works when uvs = 0,0 0,1 1,0
+    float w0 = eF(C,B,uv);
+    float w1 = eF(A,C,uv);
+    float w2 = eF(B,A,uv);
 
     float z = 1./(w0*idps.x + w1*idps.y + w2*idps.z);
     float depth = (w0+w1+w2)*z;
 
     // reconstruct uv with depth correction
     uv  = A/dps.x*w0 + B/dps.y*w1 + C/dps.z*w2;
+    // uv  = A*w0 + B*w1 + C*w2;
 
     // multiply back inverse interpolated depth    
     uv *= depth;
@@ -227,8 +245,8 @@ void main(void) {
     col.rgb = ovr*.6 + col.rgb*.4;
 
     // black out the other triangle
-    if (uv.x > 1.-uv.y)
-      col = vec4(0.,0.,0.,1.);
+    //if (uv.x > 1.-uv.y)
+    // col = vec4(0.,0.,0.,1.);
 
     // output color
     gl_FragColor = vec4(col.rgb*b, col.a);
@@ -316,13 +334,35 @@ def render():
       use_shader(test_shader)
       test_shader.set_uniform('norm', getNorm(q))
       test_shader.set_uniform('pos', getCenter(q[1]))
+      test_shader.set_uniform('amnt', (uiElements[-1].getValue()+1)/2);
+
       test_shader.set_uniform('dps', [
         camSpace[2,0],
         camSpace[2,1],
         camSpace[2,2]
       ])
-      test_shader.set_uniform('amnt', (uiElements[-1].getValue()+1)/2);
-      image_quad(texture,*points2d)
+      test_shader.set_uniform('uv0', [0,0])
+      test_shader.set_uniform('uv1', [1,0])
+      test_shader.set_uniform('uv2', [0,1])
+      triangle_strip(
+        [(points2d[0],points2d[1]), (points2d[2],points2d[3]), (points2d[4],points2d[5])], 
+        [(0,0), (1,0), (0,1)],
+        texture
+      )
+
+      test_shader.set_uniform('dps', [
+        camSpace[2,3],
+        camSpace[2,2],
+        camSpace[2,1],
+      ])
+      test_shader.set_uniform('uv0', [1,1])
+      test_shader.set_uniform('uv1', [0,1])
+      test_shader.set_uniform('uv2', [1,0])
+      triangle_strip(
+        [(points2d[6],points2d[7]), (points2d[4],points2d[5]), (points2d[2],points2d[3])], 
+        [(1,1), (0,1), (1,0)],
+        texture
+      )
       
       if outlines:
       

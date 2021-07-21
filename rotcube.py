@@ -7,11 +7,12 @@ class MyScene(Scene):
   def setup(self):
     lib3d.setSize(self.size)
     lib3d.toggleCube('test:Ruler', [0,0,1])
+    lib3d.toggleCube('test:Lenna', [-2,0,1])
     lib3d.addTouchControls()
     #lib3d.rotation[0] = .4;
     #lib3d.rotation[1] = .4;
 
-    lib3d.uiElements.append(lib3d.LinearJoystick(500,100, horizontal=1, autoReset=0))
+    lib3d.uiElements.append(lib3d.LinearJoystick(500,100, horizontal=1, autoReset=0, startingValue=1))
     lib3d.scale = 300.;
 
   def update(self):
