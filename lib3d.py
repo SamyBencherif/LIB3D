@@ -64,7 +64,7 @@ screen_size = (0,0)
 
 quads = []
 
-outlines = ([0.29, 0.03, 0.41], 5)
+outlines = None # ([0.29, 0.03, 0.41], 5)
 
 pointTestQueue = []
 scale = 100
@@ -83,7 +83,7 @@ proj_matrix = matrix([
 view_matrix = matrix([
     [1.,0.,0.,0.],
     [0.,1.,0.,0.],
-    [0.,0.,1.,1.],
+    [0.,0.,1.,0.],
     [0.,0.,0.,1.]
 ])
 
@@ -93,8 +93,18 @@ MVP = matmul(proj_matrix, view_matrix)
 inv_view_matrix = np.linalg.pinv(view_matrix)
 
 rotation = [0.,0.,0.]
-position = [0.,0.,-1.]
+position = [0.,0.,0.]
 offset = [0.,0.]
+
+joysticks = []
+
+# `input` is either set to None or pyglet.input
+if input and input.get_joysticks():
+
+  # all joysticks are opened, at the start of the program
+  for joy in input.get_joysticks():
+    joy.open()
+    joysticks.append(joy)
 
 uiElements = []
 
@@ -110,9 +120,9 @@ def toggleCube(tex, position):
       # generate vertices for face of cube
       vertices = (matrix(norm).T +
       matrix([[
-      position[0]-.5+i*(n==0),
-      position[1]-.5+i*(n==1),
-      position[2]-.5+i*(n==2)
+        position[0]-.5+i*(n==0),
+        position[1]-.5+i*(n==1),
+        position[2]-.5+i*(n==2)
       ],]*4).T)
       
       # only added it to the renderer if one doesn't already exist
@@ -170,10 +180,12 @@ def zdepth(quadP):
 def pointTest(point, callback):
   pointTestQueue.append((point, callback))
   
+# deprecated (does not include perspective)
 def invProjectPoint(point2d):
   assert len(point2d) == 3 # please include z-depth coordinate. It can be zero.
   return inv_view_matrix * ((matrix(point2d).T - matrix([screen_size[0]/2, screen_size[1]/2, 0]).T) / scale)
   
+# deprecated (does not include perspective)
 def projectPoint(point3d):
   return matrix([screen_size[0]/2, screen_size[1]/2, 0]).T + view_matrix * matrix(point3d).T * scale
   
@@ -220,33 +232,18 @@ void main(void) {
 
     // reconstruct uv with depth correction
     uv  = A/dps.x*w0 + B/dps.y*w1 + C/dps.z*w2;
-    // uv  = A*w0 + B*w1 + C*w2;
 
     // multiply back inverse interpolated depth    
     uv *= depth;
 
-    uv = uv * amnt + v_tex_coord * (1.-amnt);
+    // debug slider now does nothing
+    //uv = uv * amnt + v_tex_coord * (1.-amnt);
 
     // sample texture
     vec4 col = texture2D(u_texture,uv);
 
-    // test: display depth
-    col *= vec4(vec3(depth/10.), 1.);
-
     // flat shading
     float b = dot(norm, vec3(.7,.8,.9));
-
-    // colorful overlay
-    vec3 ovr = w0*vec3(0,0,1)+ 
-               w1*vec3(1,0,0)+ 
-               w2*vec3(1,1,0);
-
-    // blending
-    col.rgb = ovr*.6 + col.rgb*.4;
-
-    // black out the other triangle
-    //if (uv.x > 1.-uv.y)
-    // col = vec4(0.,0.,0.,1.);
 
     // output color
     gl_FragColor = vec4(col.rgb*b, col.a);
@@ -265,6 +262,7 @@ def render():
   quads.sort(key=lambda q: zdepth(q[1]))
   
   pmat = matrix([position,]*4).T
+  pmat_ex = matrix([[position[0],position[1],position[2],1],]*4).T
   testHit = None
   i = 0
   while i < len(quads):
@@ -298,8 +296,8 @@ def render():
 
     if not fcull:
       for j in range(pointMatrix.shape[1]):
-        points2d.append(screen_size[0]/2+ scale/500.*pointMatrix[0,j]/pointMatrix[3,j] +offset[0])
-        points2d.append(screen_size[1]/2+ scale/500.*pointMatrix[1,j]/pointMatrix[3,j] +offset[1])
+        points2d.append(screen_size[0]/2+scale/500.*pointMatrix[0,j]/pointMatrix[3,j]+offset[0])
+        points2d.append(screen_size[1]/2+scale/500.*pointMatrix[1,j]/pointMatrix[3,j]+offset[1])
         
       global pointTestQueue
       if pointTestQueue:
@@ -334,6 +332,7 @@ def render():
       use_shader(test_shader)
       test_shader.set_uniform('norm', getNorm(q))
       test_shader.set_uniform('pos', getCenter(q[1]))
+      # temporary hook on last uiElement, to use as shader param
       test_shader.set_uniform('amnt', (uiElements[-1].getValue()+1)/2);
 
       test_shader.set_uniform('dps', [
@@ -445,19 +444,20 @@ def rot2d(x,y,angle):
   
 @call_once_at_start
 def setViewMatrix():
-  alpha = (rotation[0])
-  beta = (rotation[1])
+  r0 = rotation[0]
+  r1 = rotation[1]
+  r2 = rotation[2]
   
-  # isometric projection/
-  view_matrix[0,0] = cos(beta)
-  view_matrix[0,1] = 0
-  view_matrix[0,2] = -sin(beta)
-  view_matrix[1,0] = sin(alpha)*sin(beta)
-  view_matrix[1,1] = cos(alpha)
-  view_matrix[1,2] = sin(alpha)*cos(beta)
-  view_matrix[2,0] = cos(alpha)*sin(beta)
-  view_matrix[2,1] = -sin(alpha)
-  view_matrix[2,2] = cos(alpha)*cos(beta)
+  # view rotation
+  view_matrix[0,0] = cos(r1)*cos(r2)
+  view_matrix[0,1] = -sin(r2)*cos(r1)
+  view_matrix[0,2] = sin(r1)
+  view_matrix[1,0] = sin(r0)*sin(r1)*cos(r2)+sin(r2)*cos(r0)
+  view_matrix[1,1] = -sin(r0)*sin(r1)*sin(r2)+cos(r0)*cos(r2)
+  view_matrix[1,2] = -sin(r0)*cos(r1)
+  view_matrix[2,0] = sin(r0)*sin(r2)-sin(r1)*cos(r0)*cos(r2)
+  view_matrix[2,1] = sin(r0)*cos(r2)+sin(r1)*sin(r2)*cos(r0)
+  view_matrix[2,2] = cos(r0)*cos(r1)
   
   inv_view_matrix = np.linalg.pinv(view_matrix)
 
@@ -742,8 +742,8 @@ def renderUI():
     e.render()
     
   if rotJoy:
-    rotation[1] += rotJoy.getValue()[0] / 120
-    rotation[0] -= rotJoy.getValue()[1] / 120
+    rotation[1] -= rotJoy.getValue()[0] / 120
+    rotation[0] += rotJoy.getValue()[1] / 120
     setViewMatrix()
     
   if zoomSlider:
@@ -758,10 +758,41 @@ def renderUI():
     VAxis = panJoy.getValue()[1] / 40
     position[0] += HAxis*cos(rotation[1]) + VAxis*sin(rotation[1])
     position[2] += -HAxis*sin(rotation[1]) + VAxis*cos(rotation[1])
+
+
+  # for now joystick movement is handled in renderUI
+  # all joystick data is applied to the same user
+  # which means any controller can be used, but they
+  # will "fight" for control when used at the same time
+
+  if input:
+    for joy in joysticks:
+      
+      x,y,rx,ry = joy.x,joy.y,joy.rx,joy.ry
+
+      # if controller is roughly centered, zero it out
+      zero_thres = .1
+      if x**2 + y**2 < zero_thres**2:
+        x = 0; y = 0
+      if rx**2 + ry**2 < zero_thres**2:
+        rx = 0; ry = 0
+
+      rotation[1] -= rx /  30
+      rotation[0] -= ry /  30
+      setViewMatrix()
+        
+      global scale
+      position[1] += 0/50
+        
+      HAxis = x / 40
+      VAxis = -y / 40
+      position[0] += HAxis*cos(-rotation[1]) + VAxis*sin(-rotation[1])
+      position[2] += -HAxis*sin(-rotation[1]) + VAxis*cos(-rotation[1])
     
 panJoy = None
 zoomSlider = None
 rotJoy = None
+import time
 
 def addTouchControls():
 
