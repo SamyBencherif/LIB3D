@@ -161,7 +161,7 @@ def setSize(size):
   # create a new depth mask
   global depth_mask
   # initialize WxH 8bit integers as 0-(black) signifying infinite depth
-  depth_mask = Image.new('L', (size.w, size.h), 'black')
+  #depth_mask = Image.new('L', (size.w, size.h), 'black')
   
 def printmat(mat):
   print('[')
