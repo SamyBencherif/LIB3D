@@ -42,15 +42,15 @@ except:
 
 x_norm = [
     [0,0,0],
-    [0,0,1],
     [0,1,0],
+    [0,0,1],
     [0,1,1]
 ]
 
 y_norm = [
     [0,0,0],
-    [1,0,0],
     [0,0,1],
+    [1,0,0],
     [1,0,1]
 ]
 
@@ -65,7 +65,7 @@ screen_size = (0,0)
 
 quads = []
 
-outlines = None # ([0.29, 0.03, 0.41], 5)
+outlines = None #([0.29*255, 0.03*255, 0.41*255], 5)
 
 pointTestQueue = []
 scale = 100
@@ -128,8 +128,15 @@ def toggleCube(tex, position):
     norm = (x_norm, y_norm, z_norm)[n]
     for i in range(2):
     
+      if i==0:
+        # leave winding alone
+        face = norm
+      else:
+        # "flip normal"
+        face = [face[0], face[2], face[1], face[3]] 
+
       # generate vertices for face of cube
-      vertices = (matrix(norm).T +
+      vertices = (matrix(face).T +
       matrix([[
         position[0]-.5+i*(n==0),
         position[1]-.5+i*(n==1),
@@ -191,7 +198,20 @@ New elements are initialized to 1.'''
 def zdepth(quadP):
   quadP = extendRow(quadP)
   proj = matmul(MVP, quadP)
-  return sum([proj[2,i] for i in range(4)])
+
+  # z-depth
+  # return sum([proj[2,i] for i in range(4)])
+
+  x=0;y=1;z=2;w=3
+  A=0;B=1;C=2;D=3
+  midpoint = [
+    (proj[x,A]+proj[x,B]+proj[x,C]+proj[x,D])/4,
+    (proj[y,A]+proj[y,B]+proj[y,C]+proj[y,D])/4,
+    (proj[z,A]+proj[z,B]+proj[z,C]+proj[z,D])/4,
+    (proj[w,A]+proj[w,B]+proj[w,C]+proj[w,D])/4,
+  ]
+
+  return midpoint[z]
   
 def pointTest(point, callback):
   pointTestQueue.append((point, callback))
@@ -223,9 +243,10 @@ uniform vec3 pos;
 // eye-space
 uniform vec3 dps;
 
-// for debug slider
+// debug variable, exposed to lib3d client
 uniform float amnt; 
 
+// uv coordinates for vertices 0,1,2
 uniform vec2 uv0;
 uniform vec2 uv1;
 uniform vec2 uv2;
@@ -244,7 +265,7 @@ void main(void) {
     vec2 B = uv1;
     vec2 C = uv2;
 
-    // works when uvs = 0,0 0,1 1,0
+    // coefficients for parameter blending
     float w0 = eF(C,B,uv);
     float w1 = eF(A,C,uv);
     float w2 = eF(B,A,uv);
@@ -258,26 +279,14 @@ void main(void) {
     // multiply back inverse interpolated depth    
     uv *= depth;
 
-    // debug slider now does nothing
-    //uv = uv * amnt + v_tex_coord * (1.-amnt);
-
     // sample texture
     vec4 col = texture2D(u_texture,uv);
 
     // flat shading
     float b = dot(norm, vec3(.7,.8,.9));
 
-    // occlusion culling
-    //if (gl_FragCoord.z > depth)
-    //  col.a = 0.;
-
     // output color
-    //gl_FragColor = vec4(col.rgb*b, col.a);
-    // view FragCoord.z (red, yellow, green) (1, .5, 0)
-    gl_FragData[0].rgba = vec4(vec3(gl_FragCoord.z, .4, 0.), col.a);
-    // output fragdepth
-    // gl_FragDepth = 1./depth;
-
+    gl_FragColor = vec4(col.rgb*b, col.a);
 }
 ''')
 
@@ -288,10 +297,21 @@ void main(void) {
 def findNearest(A,B,T):
   return (np.linalg.pinv(B-A) * (T-A)).tolist()[0][0]
   
+
+# takes an array of 3 points listed as 6 coordinates in a flat array
+def testAntiClockwise(points2d):
+  p = points2d
+  M = np.matrix([
+    [p[0],p[1],1],
+    [p[2],p[3],1],
+    [p[4],p[5],1]
+  ])
+  return np.linalg.det(M) > 0
+
 def render():
 
   # depth sorting heuristic
-  #quads.sort(key=lambda q: zdepth(q[1]))
+  quads.sort(key=lambda q: zdepth(q[1]))
   
   pmat = matrix([position,]*4).T
   pmat_ex = matrix([[position[0],position[1],position[2],1],]*4).T
@@ -331,7 +351,9 @@ def render():
       for j in range(pointMatrix.shape[1]):
         points2d.append(screen_size[0]/2+scale/500.*pointMatrix[0,j]/pointMatrix[3,j]+offset[0])
         points2d.append(screen_size[1]/2+scale/500.*pointMatrix[1,j]/pointMatrix[3,j]+offset[1])
-        
+      
+      # unused raycasting-esque routine
+      """
       global pointTestQueue
       if pointTestQueue:
         testPoint, callback = pointTestQueue[0]
@@ -361,6 +383,7 @@ def render():
           
         if not failed:
           testHit = (q, points2d, callback)
+        """
           
       test_shader.set_uniform('norm', getNorm(q))
       test_shader.set_uniform('pos', getCenter(q[1]))
@@ -369,33 +392,35 @@ def render():
       # from a data-management perspective this is a quad based renderer
       # however, from a graphics perspective it uses an underlying triangle
       # based renderer. In the future, everything should be triangles.
-      test_shader.set_uniform('dps', [
-        camSpace[2,0],
-        camSpace[2,1],
-        camSpace[2,2]
-      ])
-      test_shader.set_uniform('uv0', [0,0])
-      test_shader.set_uniform('uv1', [1,0])
-      test_shader.set_uniform('uv2', [0,1])
-      triangle_strip(
-        [(points2d[0],points2d[1]), (points2d[2],points2d[3]), (points2d[4],points2d[5])], 
-        [(0,0), (1,0), (0,1)],
-        texture
-      )
+      if testAntiClockwise(points2d[0:6]):
+        test_shader.set_uniform('dps', [
+          camSpace[2,0],
+          camSpace[2,1],
+          camSpace[2,2]
+        ])
+        test_shader.set_uniform('uv0', [0,0])
+        test_shader.set_uniform('uv1', [1,0])
+        test_shader.set_uniform('uv2', [0,1])
+        triangle_strip(
+          [(points2d[0],points2d[1]), (points2d[2],points2d[3]), (points2d[4],points2d[5])], 
+          [(0,0), (1,0), (0,1)],
+          texture
+        )
 
-      test_shader.set_uniform('dps', [
-        camSpace[2,3],
-        camSpace[2,2],
-        camSpace[2,1],
-      ])
-      test_shader.set_uniform('uv0', [1,1])
-      test_shader.set_uniform('uv1', [0,1])
-      test_shader.set_uniform('uv2', [1,0])
-      triangle_strip(
-        [(points2d[6],points2d[7]), (points2d[4],points2d[5]), (points2d[2],points2d[3])], 
-        [(1,1), (0,1), (1,0)],
-        texture
-      )
+      if testAntiClockwise(points2d[6:8]+points2d[4:6]+points2d[2:4]):
+        test_shader.set_uniform('dps', [
+          camSpace[2,3],
+          camSpace[2,2],
+          camSpace[2,1],
+        ])
+        test_shader.set_uniform('uv0', [1,1])
+        test_shader.set_uniform('uv1', [0,1])
+        test_shader.set_uniform('uv2', [1,0])
+        triangle_strip(
+          [(points2d[6],points2d[7]), (points2d[4],points2d[5]), (points2d[2],points2d[3])], 
+          [(1,1), (0,1), (1,0)],
+          texture
+        )
       
       if outlines:
       
@@ -412,10 +437,12 @@ def render():
     i += 1
     
   use_shader(None)
-  pointTestQueue = pointTestQueue[1:]
-  if testHit:
-    q, points2d, callback = testHit
-    callback(q, points2d)
+  
+  # part of above ray-casting unit
+  #pointTestQueue = pointTestQueue[1:]
+  #if testHit:
+  #  q, points2d, callback = testHit
+  #  callback(q, points2d)
     
     
 def getNorm(quad3d):
@@ -821,8 +848,8 @@ def renderUI():
       if rx**2 + ry**2 < zero_thres**2:
         rx = 0; ry = 0
 
-      rotation[1] -= rx /  30
-      rotation[0] -= ry /  30
+      rotation[1] -= rx /  90
+      rotation[0] -= ry /  90
       setViewMatrix()
         
       if joy.buttons[0]:
@@ -830,8 +857,8 @@ def renderUI():
       elif joy.buttons[2]:
         position[1] -= 1/50
         
-      HAxis = x / 40
-      VAxis = -y / 40
+      HAxis = x / 20
+      VAxis = -y / 20
       position[0] += HAxis*cos(-rotation[1]) + VAxis*sin(-rotation[1])
       position[2] += -HAxis*sin(-rotation[1]) + VAxis*cos(-rotation[1])
 
@@ -839,19 +866,25 @@ def renderUI():
   # only works on PC
   W = 119; S = 115
   A =  97; D = 100
+  SHIFT = 65505
+
   _ = 32
   I = 105; J = 106
   K = 107; L = 108
 
+  # floor movement
   HAxis = (getKeyState(D) - getKeyState(A)) / 40
   VAxis = (getKeyState(W) - getKeyState(S)) / 40
   position[0] += HAxis*cos(-rotation[1]) + VAxis*sin(-rotation[1])
   position[2] += -HAxis*sin(-rotation[1]) + VAxis*cos(-rotation[1])
 
-
+  # view rotation
   rotation[1] -= (getKeyState(L) - getKeyState(J)) /  30
   rotation[0] += (getKeyState(I) - getKeyState(K)) /  30
   setViewMatrix()
+
+  # height movement
+  position[1] += (getKeyState(_)-getKeyState(SHIFT))/50
     
 panJoy = None
 zoomSlider = None
