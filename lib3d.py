@@ -276,7 +276,7 @@ void main(void) {
     // view FragCoord.z (red, yellow, green) (1, .5, 0)
     gl_FragData[0].rgba = vec4(vec3(gl_FragCoord.z, .4, 0.), col.a);
     // output fragdepth
-    gl_FragDepth = 1./depth;
+    // gl_FragDepth = 1./depth;
 
 }
 ''')
