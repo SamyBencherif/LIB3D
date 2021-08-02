@@ -32,6 +32,7 @@ except:
 from numpy import matrix, array
 import numpy as np
 from math import cos, sin, pi, asin, tan, sqrt
+from PIL import Image
 
 # polyfill
 try:
@@ -97,6 +98,7 @@ position = [0.,0.,0.]
 offset = [0.,0.]
 
 joysticks = []
+keyboard = {}
 
 # `input` is either set to None or pyglet.input
 if input and input.get_joysticks():
@@ -107,6 +109,15 @@ if input and input.get_joysticks():
     joysticks.append(joy)
 
 uiElements = []
+
+def getKeyState(k):
+
+  # if key state is not recorded, assume 0
+  if not k in keyboard.keys():
+    return 0
+
+  # otherwise, return recorded key state
+  return keyboard[k]
 
 def addQuad(tex, points, position):
   quads.append([tex, (matrix(points).T + matrix([position,]*4).T)])
@@ -146,6 +157,11 @@ def centerContent():
 def setSize(size):
   global screen_size
   screen_size = (size.w, size.h)
+
+  # create a new depth mask
+  global depth_mask
+  # initialize WxH 8bit integers as 0-(black) signifying infinite depth
+  depth_mask = Image.new('L', (size.w, size.h), 'black')
   
 def printmat(mat):
   print('[')
@@ -199,10 +215,16 @@ uniform float u_time;
 uniform vec2 u_sprite_size;
 
 // these are set by lib3d
+
+// world space
 uniform vec3 norm;
 uniform vec3 pos;
+
+// eye-space
 uniform vec3 dps;
-uniform float amnt; // for debug slider
+
+// for debug slider
+uniform float amnt; 
 
 uniform vec2 uv0;
 uniform vec2 uv1;
@@ -245,8 +267,17 @@ void main(void) {
     // flat shading
     float b = dot(norm, vec3(.7,.8,.9));
 
+    // occlusion culling
+    //if (gl_FragCoord.z > depth)
+    //  col.a = 0.;
+
     // output color
-    gl_FragColor = vec4(col.rgb*b, col.a);
+    //gl_FragColor = vec4(col.rgb*b, col.a);
+    // view FragCoord.z (red, yellow, green) (1, .5, 0)
+    gl_FragData[0].rgba = vec4(vec3(gl_FragCoord.z, .4, 0.), col.a);
+    // output fragdepth
+    gl_FragDepth = 1./depth;
+
 }
 ''')
 
@@ -259,12 +290,14 @@ def findNearest(A,B,T):
   
 def render():
 
-  quads.sort(key=lambda q: zdepth(q[1]))
+  # depth sorting heuristic
+  #quads.sort(key=lambda q: zdepth(q[1]))
   
   pmat = matrix([position,]*4).T
   pmat_ex = matrix([[position[0],position[1],position[2],1],]*4).T
   testHit = None
   i = 0
+  use_shader(test_shader)
   while i < len(quads):
     if i >= len(quads):
       # caused by delete
@@ -329,12 +362,13 @@ def render():
         if not failed:
           testHit = (q, points2d, callback)
           
-      use_shader(test_shader)
       test_shader.set_uniform('norm', getNorm(q))
       test_shader.set_uniform('pos', getCenter(q[1]))
-      # temporary hook on last uiElement, to use as shader param
-      test_shader.set_uniform('amnt', (uiElements[-1].getValue()+1)/2);
 
+      # hardcoded uniform/render pass for two triangles to form quad
+      # from a data-management perspective this is a quad based renderer
+      # however, from a graphics perspective it uses an underlying triangle
+      # based renderer. In the future, everything should be triangles.
       test_shader.set_uniform('dps', [
         camSpace[2,0],
         camSpace[2,1],
@@ -413,23 +447,33 @@ def getQuad(searchPoints):
 
 def access(originalEvent):
 
-  def injection(self, touch):
+  def injection(self, touchorkey):
   
     cancelEv = False
-    for e in uiElements:
+    touch = True
     
-      if e.hitTest(touch.location) and originalEvent.__name__ == "touch_began":
-        e.touch_began(touch)
-        cancelEv = True # block event
-      if e.activeTouchId == touch.touch_id and originalEvent.__name__ == "touch_moved":
-        e.touch_moved(touch)
-        cancelEv = True # block event
-      if e.activeTouchId == touch.touch_id and originalEvent.__name__ == "touch_ended":
-        e.touch_ended(touch)
-        cancelEv = True # block event
+    if originalEvent.__name__ == "key_down":
+      touch = False
+      keyboard.update({touchorkey: 1})
+    elif originalEvent.__name__ == "key_up":
+      keyboard.update({touchorkey: 0})
+      touch = False
+
+    if touch:
+      for e in uiElements:
+
+        if e.hitTest(touchorkey.location) and originalEvent.__name__ == "touch_began":
+          e.touch_began(touchorkey)
+          cancelEv = True # block event
+        elif e.activeTouchId == touchorkey.touch_id and originalEvent.__name__ == "touch_moved":
+          e.touch_moved(touchorkey)
+          cancelEv = True # block event
+        elif e.activeTouchId == touchorkey.touch_id and originalEvent.__name__ == "touch_ended":
+          e.touch_ended(touchorkey)
+          cancelEv = True # block event
         
     if not (cancelEv and UIBlocks):
-      originalEvent(self, touch)
+      originalEvent(self, touchorkey)
       
   return injection
   
@@ -742,12 +786,12 @@ def renderUI():
     e.render()
     
   if rotJoy:
-    rotation[1] -= rotJoy.getValue()[0] / 120
-    rotation[0] += rotJoy.getValue()[1] / 120
+    rotation[1] -= rotJoy.getValue()[0] / 30
+    rotation[0] += rotJoy.getValue()[1] / 30
     setViewMatrix()
     
   if zoomSlider:
-    global scale
+    #global scale
     #scale += zoomSlider.getValue() * 5
     #scale = min(max(10, scale), 500)
     # temporary: repurpose slider as elevation control
@@ -756,8 +800,8 @@ def renderUI():
   if panJoy:
     HAxis = panJoy.getValue()[0] / 40
     VAxis = panJoy.getValue()[1] / 40
-    position[0] += HAxis*cos(rotation[1]) + VAxis*sin(rotation[1])
-    position[2] += -HAxis*sin(rotation[1]) + VAxis*cos(rotation[1])
+    position[0] += HAxis*cos(-rotation[1]) + VAxis*sin(-rotation[1])
+    position[2] += -HAxis*sin(-rotation[1]) + VAxis*cos(-rotation[1])
 
 
   # for now joystick movement is handled in renderUI
@@ -781,13 +825,33 @@ def renderUI():
       rotation[0] -= ry /  30
       setViewMatrix()
         
-      global scale
-      position[1] += 0/50
+      if joy.buttons[0]:
+        position[1] += 1/50
+      elif joy.buttons[2]:
+        position[1] -= 1/50
         
       HAxis = x / 40
       VAxis = -y / 40
       position[0] += HAxis*cos(-rotation[1]) + VAxis*sin(-rotation[1])
       position[2] += -HAxis*sin(-rotation[1]) + VAxis*cos(-rotation[1])
+
+  # keyboard input
+  # only works on PC
+  W = 119; S = 115
+  A =  97; D = 100
+  _ = 32
+  I = 105; J = 106
+  K = 107; L = 108
+
+  HAxis = (getKeyState(D) - getKeyState(A)) / 40
+  VAxis = (getKeyState(W) - getKeyState(S)) / 40
+  position[0] += HAxis*cos(-rotation[1]) + VAxis*sin(-rotation[1])
+  position[2] += -HAxis*sin(-rotation[1]) + VAxis*cos(-rotation[1])
+
+
+  rotation[1] -= (getKeyState(L) - getKeyState(J)) /  30
+  rotation[0] += (getKeyState(I) - getKeyState(K)) /  30
+  setViewMatrix()
     
 panJoy = None
 zoomSlider = None
@@ -798,17 +862,17 @@ def addTouchControls():
 
   # pan
   global panJoy
-  panJoy = Joystick(65,100)
+  panJoy = Joystick(150,150)
   uiElements.append(panJoy)
   
   # zoom
   global zoomSlider
-  zoomSlider = LinearJoystick(65,220)
+  zoomSlider = LinearJoystick(150,270)
   uiElements.append(zoomSlider)
   
   # rotate
   global rotJoy
-  rotJoy = Joystick(-65,100)
+  rotJoy = Joystick(-150,150)
   uiElements.append(rotJoy)
   
 def save(path):
