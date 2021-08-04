@@ -65,12 +65,12 @@ screen_size = (0,0)
 
 quads = []
 
-outlines = None #([0.29*255, 0.03*255, 0.41*255], 5)
+outlines = None #([0.29, 0.03, 0.41], 2)
 
 pointTestQueue = []
-scale = 100
+scale = 1000
 
-near = 10
+near = 5
 far = 1000
 width = .01
 height = width
@@ -122,6 +122,20 @@ def getKeyState(k):
 def addQuad(tex, points, position):
   quads.append([tex, (matrix(points).T + matrix([position,]*4).T)])
   
+
+
+
+
+
+
+"""
+Toggle cube was designed for the voxel based isometric renderer,
+it had a mechanism for reducing face counts but it does not seem
+to be working now.
+
+TODO: create a new cube function that gives precise control over
+vertices, uvs, and transform
+"""
 def toggleCube(tex, position):
 
   for n in range(3):
@@ -283,7 +297,7 @@ void main(void) {
     vec4 col = texture2D(u_texture,uv);
 
     // flat shading
-    float b = dot(norm, vec3(.7,.8,.9));
+    float b = dot(norm, vec3(.6,.9,.8));
 
     // output color
     gl_FragColor = vec4(col.rgb*b, col.a);
@@ -317,8 +331,10 @@ def render():
   pmat_ex = matrix([[position[0],position[1],position[2],1],]*4).T
   testHit = None
   i = 0
-  use_shader(test_shader)
   while i < len(quads):
+
+    use_shader(test_shader)
+
     if i >= len(quads):
       # caused by delete
       break
@@ -341,57 +357,59 @@ def render():
     camSpace = matmul(view_matrix, pointMatrix)
     pointMatrix = matmul(MVP, pointMatrix)
     assert pointMatrix.shape == (4,4)
+    
+    for j in range(pointMatrix.shape[1]):
+      points2d.append(screen_size[0]/2+scale/500.*pointMatrix[0,j]/pointMatrix[3,j]+offset[0])
+      points2d.append(screen_size[1]/2+scale/500.*pointMatrix[1,j]/pointMatrix[3,j]+offset[1])
+    
+    # unused raycasting-esque routine
+    """
+    global pointTestQueue
+    if pointTestQueue:
+      testPoint, callback = pointTestQueue[0]
+      # run test on testPoint and points2d
+      
+      # precise test
+      A = matrix([[points2d[0]],
+      [points2d[1]]])
+      B = matrix([[points2d[2]],
+      [points2d[3]]])
+      C = matrix([[points2d[4]],
+      [points2d[5]]])
+      D = matrix([[points2d[6]],
+      [points2d[7]]])
+      M = (A+D)/2
+      T = matrix([[testPoint[0]],
+      [testPoint[1]]])
+      
+      failed = False
+      for (P1,P2) in [(A,B),(B,D),(C,D),(A,C)]:
+        control = P1 + (P2-P1) * findNearest(P1,P2,T)
+
+        # if path from midpoint to testpoint crosses an edge...
+        if findNearest(M, control, T) > 1:
+          failed = True
+          break
+        
+      if not failed:
+        testHit = (q, points2d, callback)
+    """
+        
+    test_shader.set_uniform('norm', getNorm(q))
+    test_shader.set_uniform('pos', getCenter(q[1]))
+
+    # hardcoded uniform/render pass for two triangles to form quad
+    # from a data-management perspective this is a quad based renderer
+    # however, from a graphics perspective it uses an underlying triangle
+    # based renderer. In the future, everything should be triangles.
 
     fcull = False
-    for j in range(pointMatrix.shape[1]):
-      if pointMatrix[2,j]/pointMatrix[3,j] > 0:
-        fcull = True 
+    for j in range(4):
+      if pointMatrix[2,j]/pointMatrix[3,j] >= 0:
+        fcull = True
 
     if not fcull:
-      for j in range(pointMatrix.shape[1]):
-        points2d.append(screen_size[0]/2+scale/500.*pointMatrix[0,j]/pointMatrix[3,j]+offset[0])
-        points2d.append(screen_size[1]/2+scale/500.*pointMatrix[1,j]/pointMatrix[3,j]+offset[1])
-      
-      # unused raycasting-esque routine
-      """
-      global pointTestQueue
-      if pointTestQueue:
-        testPoint, callback = pointTestQueue[0]
-        # run test on testPoint and points2d
-        
-        # precise test
-        A = matrix([[points2d[0]],
-        [points2d[1]]])
-        B = matrix([[points2d[2]],
-        [points2d[3]]])
-        C = matrix([[points2d[4]],
-        [points2d[5]]])
-        D = matrix([[points2d[6]],
-        [points2d[7]]])
-        M = (A+D)/2
-        T = matrix([[testPoint[0]],
-        [testPoint[1]]])
-        
-        failed = False
-        for (P1,P2) in [(A,B),(B,D),(C,D),(A,C)]:
-          control = P1 + (P2-P1) * findNearest(P1,P2,T)
 
-          # if path from midpoint to testpoint crosses an edge...
-          if findNearest(M, control, T) > 1:
-            failed = True
-            break
-          
-        if not failed:
-          testHit = (q, points2d, callback)
-        """
-          
-      test_shader.set_uniform('norm', getNorm(q))
-      test_shader.set_uniform('pos', getCenter(q[1]))
-
-      # hardcoded uniform/render pass for two triangles to form quad
-      # from a data-management perspective this is a quad based renderer
-      # however, from a graphics perspective it uses an underlying triangle
-      # based renderer. In the future, everything should be triangles.
       if testAntiClockwise(points2d[0:6]):
         test_shader.set_uniform('dps', [
           camSpace[2,0],
@@ -421,8 +439,11 @@ def render():
           [(1,1), (0,1), (1,0)],
           texture
         )
-      
+
       if outlines:
+      
+        # draw outlines with default shader
+        use_shader(None)
       
         stroke(*outlines[0])
         stroke_weight(outlines[1])
@@ -433,10 +454,14 @@ def render():
         line(points2d[4], points2d[5], points2d[0], points2d[1])
         
         no_stroke()
-        
+      
+    # get ready to draw next quad
     i += 1
-    
+
+  # always return to default shader at the end of rendering
+  # to allow for drawing of UI elements and other overlays
   use_shader(None)
+    
   
   # part of above ray-casting unit
   #pointTestQueue = pointTestQueue[1:]
@@ -817,11 +842,8 @@ def renderUI():
     rotation[0] += rotJoy.getValue()[1] / 30
     setViewMatrix()
     
+  # "zoom" slider is now used for elevation
   if zoomSlider:
-    #global scale
-    #scale += zoomSlider.getValue() * 5
-    #scale = min(max(10, scale), 500)
-    # temporary: repurpose slider as elevation control
     position[1] += zoomSlider.getValue()/50
     
   if panJoy:
